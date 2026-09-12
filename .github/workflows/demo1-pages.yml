@@ -11,6 +11,8 @@ on:
     branches: [main]
     paths:
       - 'Demo1_Ride/**'
+      - '!Demo1_Ride/**.md'
+      - '!Demo1_Ride/Study/**'
       - '.github/workflows/demo1-pages.yml'
   workflow_dispatch:
 

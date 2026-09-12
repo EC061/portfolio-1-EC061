@@ -7,13 +7,22 @@ name: Demo1_Ride image
 on:
   push:
     branches: [main]
+    # Documentation lives inside Demo1_Ride/ but is excluded from the
+    # image by .dockerignore, so editing a README should not spend six
+    # minutes rebuilding two architectures.
     paths:
       - 'Demo1_Ride/**'
+      - '!Demo1_Ride/**.md'
+      - '!Demo1_Ride/docs/**'
+      - '!Demo1_Ride/Study/**'
       - '.github/workflows/demo1-image.yml'
     tags: ['v*']
   pull_request:
     paths:
       - 'Demo1_Ride/**'
+      - '!Demo1_Ride/**.md'
+      - '!Demo1_Ride/docs/**'
+      - '!Demo1_Ride/Study/**'
       - '.github/workflows/demo1-image.yml'
   workflow_dispatch:
 
