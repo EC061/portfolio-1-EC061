@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1020" />
+    <title>Midway — A Carnival Ride in WebXR</title>
+    <meta name="description" content="A procedurally built fairground: a Ferris wheel with self-levelling gondolas, a swing carousel and teacups, rendered with three.js and rideable in WebXR." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎡</text></svg>" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="loader">
+      <div class="ring"></div>
+      <p>Building the midway…</p>
+    </div>
+
+    <div id="hud" hidden>
+      <header>
+        <h1>MIDWAY</h1>
+        <button id="panel-toggle" title="Hide panel (H)">–</button>
+      </header>
+
+      <div id="panel-body">
+        <section>
+          <label class="sec">View <kbd>1</kbd>–<kbd>6</kbd></label>
+          <div id="views" class="chips"></div>
+        </section>
+
+        <section>
+          <label class="sec">Time of day <kbd>N</kbd></label>
+          <div class="row">
+            <input id="night" type="range" min="0" max="1" step="0.01" value="0" />
+            <span id="night-label" class="val">Day</span>
+          </div>
+        </section>
+
+        <section>
+          <label class="sec">Ride speed</label>
+          <div class="row">
+            <input id="speed" type="range" min="0" max="2.2" step="0.01" value="1" />
+            <span id="speed-label" class="val">1.00&times;</span>
+          </div>
+        </section>
+
+        <section>
+          <label class="sec">Quality <kbd>Q</kbd></label>
+          <div id="quality" class="chips"></div>
+        </section>
+
+        <section class="toggles">
+          <label><input type="checkbox" id="t-shadows" checked /> Shadows</label>
+          <label><input type="checkbox" id="t-glow" checked /> Bulb glow</label>
+          <label><input type="checkbox" id="t-level" checked /> Level gondolas <kbd>L</kbd></label>
+          <label><input type="checkbox" id="t-frames" /> Show frames <kbd>F</kbd></label>
+          <label><input type="checkbox" id="t-pause" /> Pause <kbd>␣</kbd></label>
+        </section>
+
+        <section id="xr-slot"></section>
+
+        <p class="hint" id="hint">Drag to orbit · scroll to zoom · <kbd>1</kbd>–<kbd>6</kbd> views · <kbd>N</kbd> night · <kbd>P</kbd> stats</p>
+      </div>
+    </div>
+
+    <div id="stats" hidden>
+      <div class="s"><b id="s-fps">0</b><span>fps</span></div>
+      <div class="s"><b id="s-ms">0.0</b><span>ms/frame</span></div>
+      <div class="s"><b id="s-calls">0</b><span>draw calls</span></div>
+      <div class="s"><b id="s-tris">0</b><span>triangles</span></div>
+      <div class="s"><b id="s-lights">0</b><span>lit / shadow</span></div>
+      <div class="s"><b id="s-progs">0</b><span>programs</span></div>
+    </div>
+
+    <div id="ticker"><span id="ticker-text"></span></div>
+
+    <canvas id="app"></canvas>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
