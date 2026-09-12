@@ -1,0 +1,65 @@
+# Demo1_Ride — "Midway"
+#
+#   docker compose up -d              pull the published image from GHCR
+#   docker compose up -d --build      build it locally instead
+#
+# The container exposes a single plain-HTTP port. TLS, the hostname and
+# the certificate are the reverse proxy's job — WebXR needs a secure
+# context, so the proxy in front of this has to serve HTTPS.
+
+services:
+  midway:
+    # Published by .github/workflows/demo1-image.yml
+    image: ${MIDWAY_IMAGE:-ghcr.io/ec061/portfolio-project-1/demo1-ride:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_PATH: ${BASE_PATH:-/}
+    container_name: midway
+    restart: unless-stopped
+
+    # host:container — change only the host half. 8080 inside is fixed by
+    # the image. Bind to 127.0.0.1 if the proxy runs on the same host:
+    #   ports: ["127.0.0.1:8080:8080"]
+    ports:
+      - "${MIDWAY_PORT:-8080}:8080"
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ---- optional: join an existing proxy network instead of publishing
+    # a port. Uncomment this and the `networks:` block below, drop
+    # `ports:`, and point the proxy at http://midway:8080.
+    #
+    # networks: [proxy]
+    #
+    # Traefik users can skip the manual router and use these labels:
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.midway.rule=Host(`midway.example.org`)"
+    #   - "traefik.http.routers.midway.entrypoints=websecure"
+    #   - "traefik.http.routers.midway.tls.certresolver=letsencrypt"
+    #   - "traefik.http.services.midway.loadbalancer.server.port=8080"
+
+# networks:
+#   proxy:
+#     external: true
