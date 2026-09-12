@@ -3,13 +3,19 @@ name: Demo1_Ride image
 # Builds the WebXR demo into a container and publishes it to GitHub
 # Container Registry. Pull it with:
 #   docker pull ghcr.io/<owner>/<repo>/demo1-ride:latest
+#
+# Each architecture is built on a runner of that architecture, in
+# parallel, and the two results are stitched into one multi-arch manifest
+# afterwards. No QEMU: emulating arm64 on an amd64 host makes `npm ci`
+# and the Vite build several times slower for no benefit now that GitHub
+# hands out native arm64 runners.
 
 on:
   push:
     branches: [main]
     # Documentation lives inside Demo1_Ride/ but is excluded from the
-    # image by .dockerignore, so editing a README should not spend six
-    # minutes rebuilding two architectures.
+    # image by .dockerignore, so editing a README should not rebuild
+    # anything.
     paths:
       - 'Demo1_Ride/**'
       - '!Demo1_Ride/**.md'
@@ -34,15 +40,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------
+  # One job per architecture, on a runner of that architecture.
+  # Each pushes an anonymous, untagged manifest and reports back only
+  # its digest; the merge job below gives them names.
+  # ---------------------------------------------------------------
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+
+    name: build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
 
     steps:
+      - name: Prepare
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       # GHCR rejects uppercase in a repository path, and GitHub usernames
@@ -51,7 +75,6 @@ jobs:
         id: img
         run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY,,}/demo1-ride" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
@@ -62,47 +85,46 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Derive tags and labels
+      # Labels and annotations only. Tags belong to the merged manifest,
+      # not to either half of it.
+      - name: Derive labels
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.img.outputs.name }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
           labels: |
             org.opencontainers.image.title=Midway — a carnival ride in WebXR
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
-      - name: Build and push
-        id: push
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./Demo1_Ride
           file: ./Demo1_Ride/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          # buildx layer cache, so a source-only change skips npm ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: true
-          sbom: true
+          annotations: ${{ steps.meta.outputs.annotations }}
+          outputs: type=image,name=${{ steps.img.outputs.name }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+          # Separate cache scopes, or the two architectures overwrite
+          # each other's layers every run and neither ever hits.
+          cache-from: type=gha,scope=demo1-${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=demo1-${{ env.PLATFORM_PAIR }}
+          # push-by-digest expects one manifest per push; attestations
+          # would wrap it in an index. Provenance is attached to the
+          # merged manifest in the `merge` job instead.
+          provenance: false
+          sbom: false
 
-      # Pull the image we just pushed and actually run it, so "the image
-      # works" is a tested claim rather than a hopeful one.
-      - name: Smoke test the published image
+      # Each architecture smoke-tests its own image, natively. Previously
+      # only amd64 was ever executed; the arm64 half was pushed untested.
+      - name: Smoke test ${{ matrix.platform }}
         if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
-          REF="${{ steps.img.outputs.name }}@${{ steps.push.outputs.digest }}"
+          REF="${{ steps.img.outputs.name }}@${{ steps.build.outputs.digest }}"
           docker run -d --name midway-smoke -p 8080:8080 "$REF"
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then break; fi
             sleep 1
           done
@@ -112,29 +134,112 @@ jobs:
           curl -fsSI http://127.0.0.1:8080/ | grep -qi 'cache-control: no-cache'
           # and WebXR needs the permissions policy to survive the proxy
           curl -fsSI http://127.0.0.1:8080/ | grep -qi 'xr-spatial-tracking'
-          echo "smoke test passed"
-          docker logs midway-smoke
+          echo "smoke test passed on $(uname -m)"
           docker rm -f midway-smoke
 
-      - name: Attest build provenance
+      - name: Export digest
         if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------
+  # Stitch the per-architecture digests into one tagged manifest list.
+  # ---------------------------------------------------------------
+  merge:
+    name: merge manifest
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Resolve image name
+        id: img
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY,,}/demo1-ride" >> "$GITHUB_OUTPUT"
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.img.outputs.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Create manifest list
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ steps.img.outputs.name }}@sha256:%s ' *)
+
+      - name: Inspect and capture the index digest
+        id: inspect
+        run: |
+          set -euo pipefail
+          REF="${{ steps.img.outputs.name }}:${{ steps.meta.outputs.version }}"
+          docker buildx imagetools inspect "$REF"
+          digest=$(docker buildx imagetools inspect "$REF" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          # fail loudly if an architecture silently went missing
+          platforms=$(docker buildx imagetools inspect "$REF" --raw | jq -r '.manifests[].platform | select(.os != "unknown") | "\(.os)/\(.architecture)"' | sort -u)
+          echo "$platforms"
+          grep -qx 'linux/amd64' <<< "$platforms"
+          grep -qx 'linux/arm64' <<< "$platforms"
+
+      - name: Attest build provenance
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ steps.img.outputs.name }}
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.inspect.outputs.digest }}
           push-to-registry: true
 
       - name: Summary
-        if: github.event_name != 'pull_request'
         run: |
           {
             echo "### Demo1_Ride image published"
+            echo
+            echo "Built natively in parallel on \`ubuntu-latest\` (amd64) and \`ubuntu-24.04-arm\` (arm64) — no QEMU."
             echo
             echo '```'
             echo "docker pull ${{ steps.img.outputs.name }}:latest"
             echo '```'
             echo
-            echo "Digest: \`${{ steps.push.outputs.digest }}\`"
+            echo "Index digest: \`${{ steps.inspect.outputs.digest }}\`"
             echo
             echo "Tags:"
             echo '```'
