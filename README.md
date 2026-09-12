@@ -140,6 +140,17 @@ it to terminate TLS — WebXR requires a secure context, so the public URL
 must be HTTPS. See [`Demo1_Ride/README.md`](Demo1_Ride/README.md#running-it)
 for the full set of knobs.
 
+> **One manual step, once.** GHCR packages are private by default, so
+> the `docker pull` above will 401 until the package is made public:
+> GitHub → *Packages* → `portfolio-1-ec061/demo1-ride` → *Package
+> settings* → *Change visibility* → Public. Pulling with a PAT works
+> either way.
+
+The image workflow pulls the image it just pushed, runs it, and asserts
+`/healthz`, the page body, the `no-cache` header on the entry document
+and the `xr-spatial-tracking` permissions policy — so "the container
+works" is a tested claim in CI rather than an assumption.
+
 ## Licence
 
 Code in this repository is MIT unless a subfolder says otherwise. Course

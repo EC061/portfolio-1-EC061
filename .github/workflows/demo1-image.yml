@@ -85,6 +85,28 @@ jobs:
           provenance: true
           sbom: true
 
+      # Pull the image we just pushed and actually run it, so "the image
+      # works" is a tested claim rather than a hopeful one.
+      - name: Smoke test the published image
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          REF="${{ steps.img.outputs.name }}@${{ steps.push.outputs.digest }}"
+          docker run -d --name midway-smoke -p 8080:8080 "$REF"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/healthz | grep -q ok
+          curl -fsS http://127.0.0.1:8080/ | grep -q 'Midway'
+          # the entry document must not be cacheable, or a deploy is invisible
+          curl -fsSI http://127.0.0.1:8080/ | grep -qi 'cache-control: no-cache'
+          # and WebXR needs the permissions policy to survive the proxy
+          curl -fsSI http://127.0.0.1:8080/ | grep -qi 'xr-spatial-tracking'
+          echo "smoke test passed"
+          docker logs midway-smoke
+          docker rm -f midway-smoke
+
       - name: Attest build provenance
         if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@v1
