@@ -150,10 +150,12 @@ for the full set of knobs.
 > settings* → *Change visibility* → Public. Pulling with a PAT works
 > either way.
 
-The image workflow pulls the image it just pushed, runs it, and asserts
-`/healthz`, the page body, the `no-cache` header on the entry document
-and the `xr-spatial-tracking` permissions policy — so "the container
-works" is a tested claim in CI rather than an assumption.
+`amd64` and `arm64` are built in parallel on native runners — no QEMU —
+and each one runs its own image on its own hardware before publishing,
+asserting `/healthz`, the page body, the `no-cache` header on the entry
+document and the `xr-spatial-tracking` permissions policy. "The
+container works" is a tested claim in CI rather than an assumption, on
+both architectures.
 
 ## Licence
 

@@ -324,8 +324,22 @@ instead of by published port.
 
 Images are built and pushed to GHCR by
 `.github/workflows/demo1-image.yml` on every push to `main` that touches
-`Demo1_Ride/`, for `linux/amd64` and `linux/arm64`, tagged `latest`,
+the app (documentation paths are excluded), tagged `latest`,
 `sha-<short>` and by semver on tags.
+
+`linux/amd64` and `linux/arm64` are built **in parallel on runners of
+their own architecture** — `ubuntu-latest` and `ubuntu-24.04-arm` — and
+merged into one manifest list afterwards with `docker buildx imagetools
+create`. There is no QEMU anywhere in the workflow. On a cold cache the
+build step went from **57 s** emulating arm64 on an amd64 host to
+**20 s** for the slower of the two native builds; total run wall-clock is
+about the same, because the merge job adds a second job's startup cost.
+
+The real win is not the seconds. Each architecture now runs its own
+image on its own hardware before publishing — `/healthz`, the page body,
+the `no-cache` header on the entry document and the `xr-spatial-tracking`
+permissions policy. Previously only amd64 was ever executed and the
+arm64 half shipped untested, because there was nothing to run it on.
 
 ---
 
