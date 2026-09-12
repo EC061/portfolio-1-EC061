@@ -22,7 +22,7 @@ here say what is broken as loudly as what works.
 
 | Demo | Video | Live / Release | What it demonstrates |
 |---|---|---|---|
-| **[Demo 1 — Midway](Demo1_Ride/)** <br> carnival ride, WebXR | <!-- TODO --> | <!-- TODO --> | A five-level transform hierarchy driven in code: gondolas that cancel their parent's rotation to stay level, a pendulum solved against effective gravity, a rider camera parented into the seat. Procedural everything, day/night lighting, 129 draw calls. |
+| **[Demo 1 — Midway](Demo1_Ride/)** <br> carnival ride, WebXR | <!-- TODO: YouTube link --> | **[live](https://ec061.github.io/portfolio-1-EC061/Demo1_Ride/)** | A five-level transform hierarchy driven in code: gondolas that cancel their parent's rotation to stay level, a pendulum solved against effective gravity, a rider camera parented into the seat. Procedural everything, day/night lighting, 129 draw calls. |
 | **[Demo 2 — Trainer](Demo2_Trainer/)** <br> sports trainer, Unity/Quest | *not started* | *not started* | Four interacting physics systems in real units — launch, flight with drag and Magnus, tracked-implement contact, surface bounce — with a repetition-and-feedback training loop and spatialised audio. |
 | **[Demo 3 — Procedure](Demo3_Procedure/)** <br> procedural trainer | *not started* | *not started* | A six-plus step procedure as an explicit state machine, with ordering constraints, wrong-part and wrong-order detection, two-handed manipulation and a constrained motion. |
 | **[Demo 4 — Hunt](Demo4_Hunt/)** <br> scavenger hunt | *not started* | *not started* | Two distinct locomotion systems, switchable in-app, in a landmarked world with five targets among twenty distractors, plus a full comfort menu argued from sensory mismatch. |
@@ -128,7 +128,11 @@ to GitHub Releases.
 
 ## Deployment
 
-Demo 1 ships as a container image, published automatically to GHCR:
+**Demo 1 is live at <https://ec061.github.io/portfolio-1-EC061/Demo1_Ride/>** — GitHub Pages, HTTPS, no login. Built and
+deployed by `.github/workflows/demo1-pages.yml` on every push to `main`
+that touches `Demo1_Ride/`.
+
+It also ships as a container image, published automatically to GHCR:
 
 ```bash
 docker pull ghcr.io/ec061/portfolio-1-ec061/demo1-ride:latest

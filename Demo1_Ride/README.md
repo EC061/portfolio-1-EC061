@@ -8,7 +8,7 @@ WebXR.
 
 | | |
 |---|---|
-| **Live demo** | <!-- TODO: paste the public HTTPS URL here --> |
+| **Live demo** | **<https://ec061.github.io/portfolio-1-EC061/Demo1_Ride/>** |
 | **Video** | <!-- TODO: paste the YouTube link here --> |
 | **Stack** | three.js r186 + Vite, no binary assets |
 | **Container** | `ghcr.io/ec061/portfolio-1-ec061/demo1-ride:latest` |
@@ -275,6 +275,13 @@ views drop you at a standing spot on the plaza.
 ---
 
 ## Running it
+
+### Hosted
+
+The public copy is on GitHub Pages at <https://ec061.github.io/portfolio-1-EC061/Demo1_Ride/>, rebuilt on every push to
+`main` that touches this folder. It is HTTPS with no login, which is what
+WebXR needs — open it in the Quest browser and the **Enter VR** button
+lights up.
 
 ```bash
 # development
