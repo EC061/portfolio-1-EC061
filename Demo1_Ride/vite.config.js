@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 
 // BASE_PATH lets the same source deploy to the root of a container (`/`)
-// and to a sub-path on GitHub Pages (`/<repo>/demo1/`).
+// and to a sub-path behind a reverse proxy (`/midway/`).
 export default defineConfig({
   base: process.env.BASE_PATH || '/',
   build: {
